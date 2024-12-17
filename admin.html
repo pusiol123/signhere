@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <style>
+    .pdf-page {
+      border: 1px solid black;
+      margin-bottom: 10px;
+      cursor: crosshair;
+    }
+    #pdf-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #generate-link {
+      margin-top: 20px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Admin Panel</h1>
+  <form id="uploadForm" enctype="multipart/form-data">
+    <input type="file" id="document" name="document" required />
+    <button type="submit">Upload</button>
+  </form>
+
+  <div id="pdf-container"></div>
+  <button id="generate-link">Generate Client Link</button>
+  <button id="copy-link" style="display:none;">Copy Link</button>
+  <p id="client-link"></p>
+
+  <script>
+    let coordinates = {};
+    let pdfFile = '';
+
+    document.getElementById('uploadForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData();
+      formData.append('document', document.getElementById('document').files[0]);
+
+      const response = await fetch('/upload', { method: 'POST', body: formData });
+      const data = await response.json();
+      pdfFile = data.file;
+      renderPdf(pdfFile);
+    });
+
+    async function renderPdf(url) {
+      const container = document.getElementById('pdf-container');
+      container.innerHTML = ''; // Wyczyść poprzedni PDF
+      const pdf = await pdfjsLib.getDocument(url).promise;
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const canvas = document.createElement('canvas');
+        canvas.classList.add('pdf-page');
+        container.appendChild(canvas);
+
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        const context = canvas.getContext('2d');
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+        };
+
+        await page.render(renderContext);
+
+        canvas.addEventListener('click', (e) => {
+          const rect = canvas.getBoundingClientRect();
+          coordinates = {
+            x: e.clientX - rect.left,
+            y: canvas.height - (e.clientY - rect.top),
+            page: pageNum,
+          };
+          document.getElementById('generate-link').style.display = 'block';
+        });
+      }
+    }
+
+    document.getElementById('generate-link').addEventListener('click', async () => {
+      await fetch('/save-coordinates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(coordinates),
+      });
+
+      const response = await fetch('/generate-link');
+      const data = await response.json();
+      const link = `${location.origin}${data.link}`;
+      document.getElementById('client-link').innerText = `Client Link: ${link}`;
+      document.getElementById('copy-link').style.display = 'block';
+    });
+
+    document.getElementById('copy-link').addEventListener('click', () => {
+      const link = document.getElementById('client-link').innerText.replace('Client Link: ', '');
+      navigator.clipboard.writeText(link).then(() => {
+        alert('Link copied to clipboard!');
+      });
+    });
+  </script>
+</body>
+</html>

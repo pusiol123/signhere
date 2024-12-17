@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch Node.js Server",
+            "type": "node",
+            "request": "launch",
+            "skipFiles": ["<node_internals>/**"],
+            "program": "${workspaceFolder}/server.js",
+            "env": {
+                "PORT": "3000"
+            },
+            "outFiles": ["${workspaceFolder}/**/*.js"]
+        }
+    ]
+}

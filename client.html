@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <style>
+    .pdf-page {
+      position: relative;
+      border: 1px solid black;
+      margin-bottom: 10px;
+    }
+    #pdf-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 20px;
+    }
+    .signature {
+      position: absolute;
+      color: black;
+      font-family: 'Allura', cursive;
+      font-size: 25px;
+    }
+    #sign-button {
+      margin-top: 20px;
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Allura&display=swap" rel="stylesheet">
+</head>
+<body>
+  <h1>Sign Document</h1>
+  <form id="clientForm">
+    <label for="name">Name:</label>
+    <input type="text" id="name" required />
+    <button type="submit">Submit</button>
+  </form>
+
+  <div id="pdf-container"></div>
+  <button id="sign-button" style="display:none;">Sign</button>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const file = urlParams.get('file');
+    const x = urlParams.get('x');
+    const y = urlParams.get('y');
+    const pageNumber = urlParams.get('page');
+
+    let name = '';
+
+    document.getElementById('clientForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      name = document.getElementById('name').value;
+      await renderPdf(`/uploads/${file}`);
+      document.getElementById('sign-button').style.display = 'block';
+    });
+
+    async function renderPdf(url) {
+      const container = document.getElementById('pdf-container');
+      container.innerHTML = ''; // Wyczyść poprzedni PDF
+      const pdf = await pdfjsLib.getDocument(url).promise;
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const canvas = document.createElement('canvas');
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('pdf-page');
+        wrapper.style.position = 'relative';
+
+        canvas.style.zIndex = 1;
+        wrapper.appendChild(canvas);
+        container.appendChild(wrapper);
+
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        const context = canvas.getContext('2d');
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+        };
+
+        await page.render(renderContext);
+
+        // Dodajemy wizualny podpis tylko na wybranej stronie
+        if (pageNum === parseInt(pageNumber)) {
+          const signature = document.createElement('div');
+          signature.classList.add('signature');
+          signature.textContent = name;
+          signature.style.left = `${x}px`;
+          signature.style.top = `${viewport.height - y}px`;
+          wrapper.appendChild(signature);
+        }
+      }
+    }
+
+    document.getElementById('sign-button').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/sign-document', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file, x, y, page: pageNumber, name }),
+        });
+
+        const data = await response.json();
+        alert(`Document signed! Download it here: ${location.origin}${data.file}`);
+      } catch (error) {
+        console.error('Error signing document:', error);
+        alert('Unable to sign the document. Please try again.');
+      }
+    });
+  </script>
+</body>
+</html>
