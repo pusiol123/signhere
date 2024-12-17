@@ -137,6 +137,11 @@ app.post('/sign-document', async (req, res) => {
     res.status(500).send({ error: 'Error signing document.' });
   }
 });
+// Prosta ścieżka testowa
+app.get('/', (req, res) => {
+  console.log('GET / - Strona główna działa!');
+  res.send('Serwer działa poprawnie!');
+});
 
 // Uruchomienie serwera
 app.listen(port, host, () => {
