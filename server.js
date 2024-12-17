@@ -4,9 +4,10 @@ const path = require('path');
 const { PDFDocument, rgb } = require('pdf-lib');
 const fontkit = require('fontkit');
 const fs = require('fs');
-
 const app = express();
-const port = 3000;
+
+// Port dynamiczny dla Render lub domyślny 3000
+const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
@@ -14,6 +15,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/signed', express.static(path.join(__dirname, 'signed')));
 app.use(express.static(path.join(__dirname))); // Udostępnia pliki statyczne (HTML, JS)
+
+// Logowanie błędów do pliku
+const logError = (message) => {
+  fs.appendFileSync('error.log', `[${new Date().toISOString()}] ${message}\n`);
+};
 
 // Upewnij się, że foldery `uploads` i `signed` istnieją
 if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
@@ -47,7 +53,9 @@ app.get('/', (req, res) => {
 // Upload pliku
 app.post('/upload', upload.single('document'), (req, res) => {
   if (!req.file) {
-    return res.status(400).send({ error: 'No file uploaded.' });
+    const errorMessage = 'No file uploaded.';
+    logError(errorMessage);
+    return res.status(400).send({ error: errorMessage });
   }
 
   uploadedFile = req.file.filename;
@@ -78,8 +86,9 @@ app.post('/sign-document', async (req, res) => {
   try {
     const filePath = path.join(__dirname, 'uploads', file);
     if (!fs.existsSync(filePath)) {
-      console.error('File not found:', filePath);
-      return res.status(404).send({ error: 'File not found.' });
+      const errorMessage = `File not found: ${filePath}`;
+      logError(errorMessage);
+      return res.status(404).send({ error: errorMessage });
     }
 
     const pdfBytes = fs.readFileSync(filePath);
@@ -91,8 +100,9 @@ app.post('/sign-document', async (req, res) => {
     // Ładowanie czcionki Allura
     const fontPath = path.join(__dirname, 'fonts', 'Allura-Regular.ttf');
     if (!fs.existsSync(fontPath)) {
-      console.error('Font file not found:', fontPath);
-      return res.status(500).send({ error: 'Font file not found.' });
+      const errorMessage = `Font file not found: ${fontPath}`;
+      logError(errorMessage);
+      return res.status(500).send({ error: errorMessage });
     }
     const fontBytes = fs.readFileSync(fontPath);
     const customFont = await pdfDoc.embedFont(fontBytes);
@@ -103,9 +113,9 @@ app.post('/sign-document', async (req, res) => {
     // Pobieramy wymiary strony PDF
     const { width: pdfWidth, height: pdfHeight } = targetPage.getSize();
 
-    // Kalibracja współrzędnych (dopasowanie z canvas do PDF)
-    const scaleFactor = 1.5; // Skala viewportu użyta w widoku klienta
-    const yOffset = 15; // Dostosowanie położenia pionowego
+    // Kalibracja współrzędnych
+    const scaleFactor = 1.5;
+    const yOffset = 15; // Korekta pionowa
     const calibratedX = parseFloat(x) / scaleFactor;
     const calibratedY = pdfHeight - (parseFloat(y) / scaleFactor) - yOffset;
 
@@ -125,6 +135,7 @@ app.post('/sign-document', async (req, res) => {
     console.log('Document signed and saved to:', signedFilePath);
     res.send({ file: `/signed/signed-${file}` });
   } catch (error) {
+    logError(`Error signing document: ${error.message}`);
     console.error('Error signing document:', error);
     res.status(500).send({ error: 'Error signing document.' });
   }
